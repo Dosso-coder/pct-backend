@@ -2,7 +2,6 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -67,27 +66,6 @@ return new class extends Migration
 
     private function addForeignKeyIfMissing(): void
     {
-        if (DB::getDriverName() === 'pgsql') {
-            DB::statement(<<<'SQL'
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1
-        FROM pg_constraint
-        WHERE conname = 'type_ressource_id_niv_complex_foreign'
-    ) THEN
-        ALTER TABLE type_ressource
-        ADD CONSTRAINT type_ressource_id_niv_complex_foreign
-        FOREIGN KEY (id_niv_complex)
-        REFERENCES niveaux_complexite (id_niv_complex)
-        ON DELETE SET NULL;
-    END IF;
-END $$;
-SQL);
-
-            return;
-        }
-
         Schema::table('type_ressource', function (Blueprint $table) {
             $table->foreign('id_niv_complex')
                 ->references('id_niv_complex')
