@@ -134,6 +134,29 @@ class AdminUserController extends Controller
 
     public function destroy($id): JsonResponse
     {
+        $currentUser = auth()->user();
+        $currentUserId = $currentUser->user_log_adm ?? $currentUser->user_log_sp ?? $currentUser->user_log_ens;
+
+        // 1. Interdire de se supprimer soi-même
+        if ($currentUserId === $id) {
+            return $this->error("Vous ne pouvez pas supprimer votre propre compte.", [], 403);
+        }
+
+        // Vérifier si la cible est un administrateur
+        $targetAdmin = DB::table('administrateur')->where('user_log_adm', $id)->first();
+
+        if ($targetAdmin) {
+            // 2. L'administrateur principal ne peut jamais être supprimé
+            if ($id === 'admin') {
+                return $this->error("L'administrateur principal ne peut pas être supprimé.", [], 403);
+            }
+
+            // 3. Seul l'admin principal peut supprimer d'autres admins
+            if ($currentUserId !== 'admin') {
+                return $this->error("Seul l'administrateur principal peut supprimer d'autres administrateurs.", [], 403);
+            }
+        }
+
         try {
             $deleted = DB::table('administrateur')->where('user_log_adm', $id)->delete();
             if (! $deleted) {
@@ -143,28 +166,17 @@ class AdminUserController extends Controller
                 $deleted = DB::table('enseignants')->where('user_log_ens', $id)->delete();
             }
         } catch (QueryException $e) {
-            // Code 23503 = violation de clé étrangère PostgreSQL (l'utilisateur a des données liées)
-            // Code 1451 = violation de clé étrangère MySQL
             if (in_array($e->getCode(), ['23503', '1451'])) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Impossible de supprimer cet utilisateur : il possède des données liées (paramètres, activités, cours). Supprimez d\'abord ces données.',
-                ], 409);
+                return $this->error("Impossible de supprimer cet utilisateur : il possède des données liées. Supprimez d'abord ces données.", [], 409);
             }
             throw $e;
         }
 
         if ($deleted) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Utilisateur supprimé',
-            ]);
+            return $this->success([], 'Utilisateur supprimé');
         }
 
-        return response()->json([
-            'success' => false,
-            'message' => 'Utilisateur introuvable',
-        ], 404);
+        return $this->error('Utilisateur introuvable', [], 404);
     }
 
     public function toggleStatus(Request $request, $id): JsonResponse
